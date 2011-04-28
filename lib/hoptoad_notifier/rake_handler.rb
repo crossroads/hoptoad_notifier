@@ -1,47 +1,25 @@
 # Patch Rake::Application to handle errors with Hoptoad
-# Code taken from Rake source
-module HoptoadNotifier::RakeHandler
-  def standard_exception_handling
-    begin
-      yield
-    rescue SystemExit => ex
-      # Exit silently with current status
-      raise
-    rescue OptionParser::InvalidOption => ex
-      # Exit silently
-      exit(false)
-    rescue Exception => ex
-      if HoptoadNotifier.configuration.rescue_rake_exceptions || 
-          (HoptoadNotifier.configuration.rescue_rake_exceptions===nil && !self.tty_output?)
-
-        HoptoadNotifier.notify(ex, :component => reconstruct_command_line, :cgi_data => ENV)
-      end
-
-      handle_exception_without_hoptoad(ex)
-      exit(false)
-    end
-  end
-
-  def handle_exception_without_hoptoad(ex)
-    # Exit with error message
-    $stderr.puts "#{name} aborted!"
-    $stderr.puts ex.message
-    if options.trace
-      $stderr.puts ex.backtrace.join("\n")
-    else
-      $stderr.puts ex.backtrace.find {|str| str =~ /#{@rakefile}/ } || ""
-      $stderr.puts "(See full trace by running task with --trace)"
-    end
-  end
-
-  def reconstruct_command_line
-    "rake #{ARGV.join( ' ' )}"
-  end
-end
-
 Rake.application.instance_eval do
   class << self
-    include HoptoadNotifier::RakeHandler
+    def reconstruct_command_line
+      "rake #{ARGV.join( ' ' )}"
+    end
+    def standard_exception_handling_with_hoptoad
+      standard_exception_handling_without_hoptoad do
+        begin
+          yield
+        rescue Exception => ex
+          # Notify hoptoad if configured, or no tty output.
+          if HoptoadNotifier.configuration.rescue_rake_exceptions ||
+              (HoptoadNotifier.configuration.rescue_rake_exceptions===nil && !self.tty_output?)
+            HoptoadNotifier.notify(ex, :component => reconstruct_command_line, :cgi_data => ENV)
+          end
+          raise ex
+        end
+      end
+    end
+    alias_method :standard_exception_handling_without_hoptoad, :standard_exception_handling
+    alias_method :standard_exception_handling, :standard_exception_handling_with_hoptoad
   end
 end
 
