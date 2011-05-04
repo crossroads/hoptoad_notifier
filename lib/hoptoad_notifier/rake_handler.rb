@@ -9,9 +9,10 @@ Rake.application.instance_eval do
         begin
           yield
         rescue Exception => ex
-          # Notify hoptoad if configured, or no tty output.
-          if HoptoadNotifier.configuration.rescue_rake_exceptions ||
-              (HoptoadNotifier.configuration.rescue_rake_exceptions===nil && !self.tty_output?)
+          # Notify Hoptoad if configured and no tty output.
+          if (HoptoadNotifier.configuration != nil and
+              HoptoadNotifier.configuration.rescue_rake_exceptions == true and
+              !self.tty_output?)
             HoptoadNotifier.notify(ex, :component => reconstruct_command_line, :cgi_data => ENV)
           end
           raise ex
